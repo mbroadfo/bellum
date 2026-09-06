@@ -160,17 +160,36 @@
     dominant-baseline: central;
     pointer-events: none;
   }
-  .cont-label {
-    font-family: "Barlow Condensed", sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-size: 12px;
-    fill: var(--ink-faint);
+  .name-label {
+    font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    fill: var(--ink-dim);
     text-anchor: middle;
     pointer-events: none;
   }
-  .cont-label.held { font-weight: 600; }
   .flash { fill: none; stroke-width: 2.5; }
+
+  /* Continent bonuses live under the board, not on it: on-map labels collided
+     with the nodes they were meant to caption. */
+  .continents { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: "Barlow Condensed", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: 2px;
+    border: 1px solid var(--hair);
+    color: var(--ink-faint);
+    background: var(--panel);
+  }
+  .chip b { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500; }
+  .chip.held { color: var(--ground); border-color: transparent; }
 
   /* Transport */
   .transport {
@@ -312,6 +331,8 @@
   </div>
   <span class="pan-hint">Drag the board sideways to pan · tap a territory to inspect it</span>
 
+  <div class="continents" id="continents"></div>
+
   <div class="transport">
     <button id="play" aria-pressed="false">Play</button>
     <button id="back" title="Step back">&#8592;</button>
@@ -346,9 +367,11 @@
       <span class="label">Territory share over the match</span>
       <svg class="share" id="share" viewBox="0 0 400 132" preserveAspectRatio="none" role="img" aria-label="Stacked area chart of territory share per player over the match"></svg>
       <p class="note">
-        Circles are territories, sized by garrison. Lines are legal attack routes &mdash; this is the
-        adjacency graph the agents actually see, not a political map. A continent name lights up in a
-        player's colour the moment they hold all of it, which is when the bonus starts paying.
+        All 42 classic territories are here &mdash; 9 in North America, 4 in South America, 7 in Europe,
+        6 in Africa, 12 in Asia, 4 in Australia. Circles are territories, sized by garrison; lines are
+        legal attack routes. This is the adjacency graph the agents actually see, not a political map.
+        A continent chip above fills with a player's colour the moment they hold all of it, which is
+        when the bonus starts paying.
       </p>
     </div>
   </div>
@@ -446,30 +469,49 @@
     }
   }
 
+  // Continent bonuses read as chips beneath the board.
+  var contBar = document.getElementById("continents");
   var contEls = M.continents.map(function (c) {
-    var sx = 0, sy = 0;
-    c.territories.forEach(function (t) { sx += M.layout[t][0]; sy += M.layout[t][1]; });
-    var n = c.territories.length;
-    var node = el("text", {
-      x: Math.round(sx / n),
-      y: Math.round(sy / n + Y) - 46,
-      "class": "cont-label"
-    });
-    node.textContent = c.name + " +" + c.bonus;
-    gCont.appendChild(node);
-    return { el: node, c: c };
+    var chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = "<span>" + c.name + "</span><b>+" + c.bonus + "</b>";
+    contBar.appendChild(chip);
+    return { el: chip, c: c };
   });
+
+  // Long names crowd their neighbours on a 1000-unit board; these are the
+  // abbreviations a printed Risk board uses anyway.
+  var SHORT = {
+    "Northwest Territory": "NW Territory",
+    "Western United States": "W. United States",
+    "Eastern United States": "E. United States",
+    "Central America": "C. America",
+    "Great Britain": "Gt. Britain",
+    "Northern Europe": "N. Europe",
+    "Western Europe": "W. Europe",
+    "Southern Europe": "S. Europe",
+    "North Africa": "N. Africa",
+    "East Africa": "E. Africa",
+    "South Africa": "S. Africa",
+    "Western Australia": "W. Australia",
+    "Eastern Australia": "E. Australia"
+  };
 
   var nodeEls = [];
   for (var t = 0; t < T; t++) {
     var xy = M.layout[t];
     var circle = el("circle", { cx: xy[0], cy: xy[1] + Y, r: 10, "class": "node" });
     var text = el("text", { x: xy[0], y: xy[1] + Y, "class": "node-label" });
+    // Fixed offset rather than radius-relative, so the caption does not jitter
+    // as the garrison grows and shrinks.
+    var caption = el("text", { x: xy[0], y: xy[1] + Y + 21, "class": "name-label" });
+    caption.textContent = SHORT[M.names[t]] || M.names[t];
     var title = el("title", {});
     title.textContent = M.names[t];
     circle.appendChild(title);
     gNodes.appendChild(circle);
     gNodes.appendChild(text);
+    gCont.appendChild(caption);
     nodeEls.push({ c: circle, t: text });
   }
 
@@ -573,8 +615,8 @@
       for (var k = 1; k < ce.c.territories.length && held; k++) {
         if (owner[base + ce.c.territories[k]] !== first) held = false;
       }
-      ce.el.setAttribute("class", held ? "cont-label held" : "cont-label");
-      ce.el.setAttribute("fill", held ? colour(first) : "var(--ink-faint)");
+      ce.el.className = held ? "chip held" : "chip";
+      ce.el.style.background = held ? colour(first) : "var(--panel)";
     }
 
     while (gFlash.firstChild) gFlash.removeChild(gFlash.firstChild);
