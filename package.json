@@ -1,0 +1,18 @@
+{
+  "name": "bellum",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bellum — a cross-paradigm arena for Risk-like world conquest: LLM, algorithmic, and neuroevolved agents on one ladder.",
+  "workspaces": ["packages/*"],
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test --import tsx packages/*/test/*.test.ts",
+    "arena": "tsx packages/arena/src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
