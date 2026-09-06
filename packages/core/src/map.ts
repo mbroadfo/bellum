@@ -26,6 +26,15 @@ export interface GameMap {
   /** continentOf[t] = the continent that contains t. */
   readonly continentOf: readonly ContinentId[];
   readonly territoryCount: number;
+  /**
+   * Display coordinates on a 1000x620 canvas, roughly geographic.
+   *
+   * The engine never reads these. They exist so a viewer can draw the board as
+   * the adjacency graph the agents actually reason over, rather than as a
+   * political map: on a phone, nodes and edges stay legible where coastlines do
+   * not, and an edge that is drawn is an attack that is legal.
+   */
+  readonly layout: readonly (readonly [number, number])[];
 }
 
 const RAW: Record<string, { bonus: number; territories: Record<string, string[]> }> = {
@@ -103,6 +112,52 @@ const RAW: Record<string, { bonus: number; territories: Record<string, string[]>
   },
 };
 
+/** Keyed by name so it cannot drift out of step with the territory ordering. */
+const LAYOUT: Record<string, [number, number]> = {
+  Alaska: [60, 90],
+  "Northwest Territory": [150, 95],
+  Greenland: [275, 60],
+  Alberta: [140, 148],
+  Ontario: [205, 152],
+  Quebec: [268, 145],
+  "Western United States": [135, 208],
+  "Eastern United States": [208, 222],
+  "Central America": [160, 278],
+  Venezuela: [215, 332],
+  Brazil: [288, 398],
+  Peru: [225, 402],
+  Argentina: [242, 472],
+  Iceland: [375, 110],
+  Scandinavia: [452, 88],
+  Ukraine: [532, 130],
+  "Great Britain": [385, 175],
+  "Northern Europe": [455, 165],
+  "Western Europe": [405, 238],
+  "Southern Europe": [472, 215],
+  "North Africa": [415, 322],
+  Egypt: [482, 305],
+  "East Africa": [532, 375],
+  Congo: [470, 402],
+  "South Africa": [480, 482],
+  Madagascar: [558, 465],
+  Ural: [605, 105],
+  Siberia: [665, 82],
+  Yakutsk: [748, 62],
+  Kamchatka: [842, 95],
+  Irkutsk: [730, 138],
+  Mongolia: [762, 188],
+  Japan: [858, 190],
+  Afghanistan: [620, 192],
+  China: [722, 232],
+  "Middle East": [555, 268],
+  India: [652, 288],
+  Siam: [732, 302],
+  Indonesia: [762, 388],
+  "New Guinea": [858, 392],
+  "Western Australia": [792, 482],
+  "Eastern Australia": [872, 492],
+};
+
 function buildEarth(): GameMap {
   const names: string[] = [];
   const continents: Continent[] = [];
@@ -133,6 +188,12 @@ function buildEarth(): GameMap {
     }
   }
 
+  const layout = names.map((n) => {
+    const xy = LAYOUT[n];
+    if (!xy) throw new Error(`No display coordinates for "${n}"`);
+    return xy;
+  });
+
   return {
     name: "Earth",
     territoryNames: names,
@@ -140,6 +201,7 @@ function buildEarth(): GameMap {
     adjacency,
     continentOf,
     territoryCount: names.length,
+    layout,
   };
 }
 

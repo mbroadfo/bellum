@@ -12,7 +12,7 @@ import { observe } from "./observation.js";
 import type { Move, Record_ } from "./protocol.js";
 import type { GameState } from "./types.js";
 
-export interface MatchOptions extends Omit<GameOptions, "playerCount" | "onRecord" | "stateRef"> {
+export interface MatchOptions extends Omit<GameOptions, "playerCount" | "onRecord"> {
   /** Keep the full record log on the result. Off by default: batch runs do not want it. */
   readonly recordLog?: boolean;
   readonly onRecord?: (r: Record_) => void;
@@ -32,7 +32,9 @@ interface Harness {
 function setup(agents: readonly Agent[], opts: MatchOptions): Harness {
   const log: Record_[] = [];
   const listeners = agents.filter((a) => a.onRecord);
-  const stateRef: { current: GameState | null } = { current: null };
+  // A caller may supply its own ref to watch the board evolve, as the replay
+  // exporter does; otherwise the driver just needs one for observations.
+  const stateRef = opts.stateRef ?? { current: null as GameState | null };
 
   const game = playGame({
     ...opts,

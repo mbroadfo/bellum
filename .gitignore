@@ -4,3 +4,6 @@ dist/
 .env
 .env.local
 replays/
+
+replay.json
+viewer/index.html
