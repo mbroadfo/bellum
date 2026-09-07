@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "description": "Bellum — a cross-paradigm arena for Risk-like world conquest: LLM, algorithmic, and neuroevolved agents on one ladder.",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "type": "module",
   "scripts": {
     "build": "tsc -b",
@@ -12,6 +14,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

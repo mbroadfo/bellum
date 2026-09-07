@@ -1,0 +1,637 @@
+<title>Bellum Live Arena</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #eef0ec;
+    --panel: #e3e7e1;
+    --panel-2: #d8ddd6;
+    --edge: #b3bbb2;
+    --edge-hot: #8d9a8c;
+    --ink: #1c2320;
+    --ink-dim: #5c6660;
+    --ink-faint: #8b948e;
+    --accent: #2f7d78;
+    --hot: #b4552c;
+    --hair: #c6cdc4;
+    --node-stroke: #eef0ec;
+    --shadow: rgba(28, 35, 32, 0.14);
+    --p0: #c8862a; --p1: #c04840; --p2: #3f68bd; --p3: #7f63c4; --p4: #5f7f52;
+    --sp: 14px;
+    --radius: 3px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0f1517; --panel: #161d20; --panel-2: #1d2529;
+      --edge: #2c383c; --edge-hot: #465a5f;
+      --ink: #dfe7e4; --ink-dim: #93a29e; --ink-faint: #63736f;
+      --accent: #5fbdb4; --hot: #e08a52; --hair: #253034;
+      --node-stroke: #0f1517; --shadow: rgba(0, 0, 0, 0.5);
+      --p0: #e3a740; --p1: #e0655c; --p2: #5f8de2; --p3: #a186e0; --p4: #86ad74;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0f1517; --panel: #161d20; --panel-2: #1d2529;
+    --edge: #2c383c; --edge-hot: #465a5f;
+    --ink: #dfe7e4; --ink-dim: #93a29e; --ink-faint: #63736f;
+    --accent: #5fbdb4; --hot: #e08a52; --hair: #253034;
+    --node-stroke: #0f1517; --shadow: rgba(0, 0, 0, 0.5);
+    --p0: #e3a740; --p1: #e0655c; --p2: #5f8de2; --p3: #a186e0; --p4: #86ad74;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .label {
+    font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-weight: 600;
+    color: var(--ink-faint);
+    font-size: 12px;
+  }
+
+  .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px var(--sp) 40px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp);
+  }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+  h1 {
+    font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+    font-size: 27px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; margin: 0; text-wrap: balance;
+  }
+
+  .sub { color: var(--ink-dim); font-size: 13px; }
+  .sub b { color: var(--ink); font-weight: 500; }
+  .sub b.live { color: var(--hot); }
+
+  .board {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .board svg { display: block; width: 100%; height: auto; }
+
+  /* Forty-two labelled nodes cannot be read across a phone at fit width, so on
+     small screens the board keeps a legible width and pans in its own scroller. */
+  @media (max-width: 760px) {
+    .board svg { width: 880px; max-width: none; }
+    .pan-hint { display: block; }
+  }
+
+  .pan-hint { display: none; font-size: 12px; color: var(--ink-faint); padding: 0 2px; }
+
+  .link { stroke: var(--edge); stroke-width: 1.1; fill: none; }
+  .link.hot { stroke: var(--edge-hot); stroke-width: 1.4; }
+  .node { stroke: var(--node-stroke); stroke-width: 1.5; }
+  .node-label {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 500;
+    fill: var(--node-stroke); text-anchor: middle; dominant-baseline: central; pointer-events: none;
+  }
+  .name-label {
+    font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+    font-size: 11px; letter-spacing: 0.04em; fill: var(--ink-dim);
+    text-anchor: middle; pointer-events: none;
+  }
+
+  .continents { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    font-family: "Barlow Condensed", sans-serif; text-transform: uppercase;
+    letter-spacing: 0.08em; font-size: 12px; font-weight: 600;
+    padding: 4px 9px; border-radius: 2px;
+    border: 1px solid var(--hair); color: var(--ink-faint); background: var(--panel);
+  }
+  .chip b { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500; }
+  .chip.held { color: var(--ground); border-color: transparent; }
+
+  .transport {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--hair);
+    border-radius: var(--radius); padding: 10px 12px;
+  }
+
+  button {
+    font-family: "Barlow Condensed", sans-serif; text-transform: uppercase;
+    letter-spacing: 0.08em; font-weight: 600; font-size: 13px;
+    color: var(--ink); background: var(--panel-2);
+    border: 1px solid var(--hair); border-radius: var(--radius);
+    padding: 7px 13px; cursor: pointer; min-height: 38px;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--ground); }
+  /* Turbo is the one control that changes what the page is doing rather than
+     how fast, so it gets the only warm colour on the page. */
+  button.turbo[aria-pressed="true"] { background: var(--hot); border-color: var(--hot); }
+
+  .seg { display: flex; gap: 0; }
+  .seg button { border-radius: 0; margin-left: -1px; padding: 7px 10px; }
+  .seg button:first-child { border-radius: var(--radius) 0 0 var(--radius); margin-left: 0; }
+  .seg button:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+
+  @media (max-width: 760px) {
+    .transport { position: sticky; bottom: 0; z-index: 5; box-shadow: 0 -6px 16px var(--shadow); }
+  }
+
+  .clock { font-size: 13px; color: var(--ink-dim); white-space: nowrap; margin-left: auto; }
+  .clock b { color: var(--ink); font-weight: 500; }
+
+  .ticker {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--hair);
+    border-left: 3px solid var(--edge); border-radius: var(--radius);
+    padding: 10px 12px; min-height: 46px;
+  }
+  .ticker .kind {
+    font-family: "Barlow Condensed", sans-serif; text-transform: uppercase;
+    letter-spacing: 0.1em; font-size: 11px; font-weight: 600;
+    padding: 2px 7px; border-radius: 2px;
+    background: var(--panel-2); color: var(--ink-dim); white-space: nowrap;
+  }
+
+  .cols { display: grid; grid-template-columns: 1fr; gap: var(--sp); }
+  @media (min-width: 860px) { .cols { grid-template-columns: 1fr 1fr; } }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--hair);
+    border-radius: var(--radius); padding: 12px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  /* Right-aligned numeric columns otherwise sit flush against the next header
+     and read as one run-together word. */
+  th + th, td + td { padding-left: 14px; }
+  th {
+    text-align: left; font-family: "Barlow Condensed", sans-serif;
+    text-transform: uppercase; letter-spacing: 0.09em; font-size: 11px;
+    font-weight: 600; color: var(--ink-faint);
+    padding: 0 0 6px; border-bottom: 1px solid var(--hair);
+  }
+  th.r, td.r { text-align: right; }
+  td { padding: 7px 0; border-bottom: 1px solid var(--hair); font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr.out td { color: var(--ink-faint); }
+  tr.out .swatch { opacity: 0.3; }
+
+  .who { display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .bar { height: 5px; background: var(--panel-2); border-radius: 2px; overflow: hidden; min-width: 42px; }
+  .bar span { display: block; height: 100%; }
+
+  .share { display: block; width: 100%; height: auto; background: var(--panel-2); border-radius: 2px; }
+  .note { font-size: 12.5px; color: var(--ink-dim); line-height: 1.55; margin: 0; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Bellum Live Arena</h1>
+    <div class="sub">
+      match <b class="num" id="matchNo">1</b> ·
+      <b class="num live" id="rate">—</b> decisions/sec ·
+      <b class="num" id="gps">—</b> matches/sec
+    </div>
+  </header>
+
+  <div class="board">
+    <svg id="map" viewBox="0 0 1000 640" role="img" aria-label="Territory adjacency graph, coloured by owner"></svg>
+  </div>
+  <span class="pan-hint">Drag the board sideways to pan</span>
+
+  <div class="continents" id="continents"></div>
+
+  <div class="transport">
+    <button id="play" aria-pressed="true">Pause</button>
+    <div class="seg" role="group" aria-label="Speed">
+      <button class="sp" data-sp="0">1&times;</button>
+      <button class="sp" data-sp="1">8&times;</button>
+      <button class="sp" data-sp="2">64&times;</button>
+    </div>
+    <button id="turbo" class="turbo" aria-pressed="false">Turbo</button>
+    <button id="skip">Next match</button>
+    <span class="clock">turn <b class="num" id="turnNow">0</b> · decision <b class="num" id="decNow">0</b></span>
+  </div>
+
+  <div class="ticker" id="ticker">
+    <span class="kind" id="tickKind">setup</span>
+    <span id="tickMsg">Starting…</span>
+  </div>
+
+  <div class="cols">
+    <div class="panel">
+      <span class="label">This match</span>
+      <table>
+        <thead><tr><th>Agent</th><th class="r">Terr.</th><th class="r">Troops</th><th style="width:30%">Share</th></tr></thead>
+        <tbody id="standings"></tbody>
+      </table>
+      <span class="label" style="margin-top:2px">Territory share, this match so far</span>
+      <svg class="share" id="share" viewBox="0 0 400 110" preserveAspectRatio="none" role="img" aria-label="Territory share per agent as the match progresses"></svg>
+      <p class="note">
+        This is the real engine running in your browser &mdash; 24 KB of it &mdash; not a recording.
+        The chart grows as the match is played, so there is no ending to spoil.
+      </p>
+    </div>
+
+    <div class="panel">
+      <span class="label">Ladder across all matches this session</span>
+      <table>
+        <thead><tr><th>Agent</th><th class="r">Score</th><th class="r">W</th><th class="r">Win%</th><th class="r">Avg rank</th></tr></thead>
+        <tbody id="ladder"></tbody>
+      </table>
+      <p class="note" id="ladderNote">
+        TrueSkill, sorted by the conservative estimate (mu &minus; 3&sigma;), so an agent has to
+        actually play before it can top the table. Hit Turbo and leave it running.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>__BUNDLE__</script>
+<script>
+(function () {
+  "use strict";
+
+  var B = window.Bellum;
+  var EARTH = B.EARTH;
+  var T = EARTH.territoryCount;
+  var VARS = ["--p0", "--p1", "--p2", "--p3", "--p4"];
+  function colour(p) { return p < 0 ? "var(--edge)" : "var(" + VARS[p % VARS.length] + ")"; }
+  function radius(u) { return 8 + Math.min(u, 30) * 0.40; }
+
+  // ---- Roster ---------------------------------------------------------------
+  function randomPolicy(seed, inputs, outputs, hidden) {
+    var rng = new B.Rng(seed);
+    function gauss() {
+      return Math.sqrt(-2 * Math.log(Math.max(rng.next(), 1e-9))) * Math.cos(2 * Math.PI * rng.next());
+    }
+    var w1 = new Float32Array(inputs * hidden), w2 = new Float32Array(hidden * outputs);
+    for (var i = 0; i < w1.length; i++) w1[i] = gauss() * Math.sqrt(2 / inputs);
+    for (var j = 0; j < w2.length; j++) w2[j] = gauss() * Math.sqrt(2 / hidden);
+    var h = new Float32Array(hidden), out = new Float32Array(outputs);
+    return function (input) {
+      for (var a = 0; a < hidden; a++) {
+        var s = 0;
+        for (var b = 0; b < inputs; b++) s += input[b] * w1[b * hidden + a];
+        h[a] = Math.tanh(s);
+      }
+      for (var c = 0; c < outputs; c++) {
+        var t = 0;
+        for (var d = 0; d < hidden; d++) t += h[d] * w2[d * outputs + c];
+        out[c] = t;
+      }
+      return out;
+    };
+  }
+
+  var W = B.DEFAULT_WEIGHTS;
+  var ROSTER = [
+    { name: "Heuristic", kind: "algorithmic", make: function () { return new B.HeuristicAgent("Heuristic"); } },
+    { name: "Aggro", kind: "algorithmic", make: function () {
+        return new B.HeuristicAgent("Aggro", Object.assign({}, W, { attackThreshold: 0.42, cardHuntThreshold: 0.3, eliminationBonus: 4 }));
+      } },
+    { name: "Turtle", kind: "algorithmic", make: function () {
+        return new B.HeuristicAgent("Turtle", Object.assign({}, W, { attackThreshold: 0.78, continentValue: 2.2, concentration: 0.9 }));
+      } },
+    { name: "NEAT-untrained", kind: "neat", make: function () {
+        return new B.NeatAgent("NEAT-untrained", policy);
+      } },
+    { name: "Random", kind: "baseline", make: function (seed) { return new B.RandomAgent("Random", seed); } }
+  ];
+  var policy = randomPolicy(42, B.observationSize(EARTH), B.policyOutputSize(T), 24);
+  var PC = ROSTER.length;
+
+  // ---- Static board ---------------------------------------------------------
+  var SVG = "http://www.w3.org/2000/svg", Y = 20;
+  function el(n, a) { var e = document.createElementNS(SVG, n); for (var k in a) e.setAttribute(k, a[k]); return e; }
+
+  var map = document.getElementById("map");
+  var gLinks = el("g", {}), gCaps = el("g", {}), gNodes = el("g", {});
+  map.appendChild(gLinks); map.appendChild(gCaps); map.appendChild(gNodes);
+
+  var linkEls = [];
+  for (var a = 0; a < T; a++) {
+    for (var k = 0; k < EARTH.adjacency[a].length; k++) {
+      var b = EARTH.adjacency[a][k];
+      if (b <= a) continue;
+      var p1 = EARTH.layout[a], p2 = EARTH.layout[b], line;
+      if (Math.abs(p1[0] - p2[0]) > 450) {
+        // Alaska to Kamchatka wraps the globe; an arc over the pole reads as the
+        // wrap, where a chord straight across would read as a false border.
+        line = el("path", { d: "M" + p1[0] + " " + (p1[1] + Y) + " Q " + ((p1[0] + p2[0]) / 2) + " " + (Y - 14) + " " + p2[0] + " " + (p2[1] + Y), "class": "link" });
+      } else {
+        line = el("line", { x1: p1[0], y1: p1[1] + Y, x2: p2[0], y2: p2[1] + Y, "class": "link" });
+      }
+      gLinks.appendChild(line);
+      linkEls.push({ el: line, a: a, b: b, hot: null });
+    }
+  }
+
+  var SHORT = {
+    "Northwest Territory": "NW Territory", "Western United States": "W. United States",
+    "Eastern United States": "E. United States", "Central America": "C. America",
+    "Great Britain": "Gt. Britain", "Northern Europe": "N. Europe", "Western Europe": "W. Europe",
+    "Southern Europe": "S. Europe", "North Africa": "N. Africa", "East Africa": "E. Africa",
+    "South Africa": "S. Africa", "Western Australia": "W. Australia", "Eastern Australia": "E. Australia"
+  };
+
+  var nodeEls = [];
+  for (var t = 0; t < T; t++) {
+    var xy = EARTH.layout[t];
+    var circle = el("circle", { cx: xy[0], cy: xy[1] + Y, r: 10, "class": "node" });
+    var num = el("text", { x: xy[0], y: xy[1] + Y, "class": "node-label" });
+    var cap = el("text", { x: xy[0], y: xy[1] + Y + 26, "class": "name-label" });
+    cap.textContent = SHORT[EARTH.territoryNames[t]] || EARTH.territoryNames[t];
+    gCaps.appendChild(cap);
+    gNodes.appendChild(circle); gNodes.appendChild(num);
+    nodeEls.push({ c: circle, n: num, owner: -2, troops: -1 });
+  }
+
+  var contBar = document.getElementById("continents");
+  var contEls = EARTH.continents.map(function (c) {
+    var chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = "<span>" + c.name + "</span><b>+" + c.bonus + "</b>";
+    contBar.appendChild(chip);
+    return { el: chip, c: c, held: -2 };
+  });
+
+  var standings = document.getElementById("standings");
+  var rows = ROSTER.map(function (r, p) {
+    var tr = document.createElement("tr");
+    tr.innerHTML = '<td><div class="who"><span class="swatch"></span><span>' + r.name + "</span></div></td>" +
+      '<td class="r num terr">0</td><td class="r num troop">0</td><td><div class="bar"><span></span></div></td>';
+    tr.querySelector(".swatch").style.background = colour(p);
+    tr.querySelector(".bar span").style.background = colour(p);
+    standings.appendChild(tr);
+    return tr;
+  });
+
+  // ---- Ladder ---------------------------------------------------------------
+  var ratings = ROSTER.map(function () { return B.newRating(); });
+  var stats = ROSTER.map(function () { return { games: 0, wins: 0, rankSum: 0 }; });
+  var ladderBody = document.getElementById("ladder");
+
+  function drawLadder() {
+    var order = ROSTER.map(function (r, i) { return i; }).sort(function (x, y) {
+      return B.conservative(ratings[y]) - B.conservative(ratings[x]);
+    });
+    ladderBody.innerHTML = "";
+    order.forEach(function (i) {
+      var s = stats[i], tr = document.createElement("tr");
+      tr.innerHTML = '<td><div class="who"><span class="swatch" style="background:' + colour(i) + '"></span><span>' +
+        ROSTER[i].name + "</span></div></td>" +
+        '<td class="r num">' + B.conservative(ratings[i]).toFixed(1) + "</td>" +
+        '<td class="r num">' + s.wins + "</td>" +
+        '<td class="r num">' + (s.games ? ((s.wins / s.games) * 100).toFixed(0) : "—") + "</td>" +
+        '<td class="r num">' + (s.games ? (s.rankSum / s.games).toFixed(2) : "—") + "</td>";
+      ladderBody.appendChild(tr);
+    });
+  }
+
+  // ---- Share chart, drawn as the match is played ----------------------------
+  var shareSvg = document.getElementById("share");
+  var SW = 400, SH = 110;
+  var samples = [];
+  var sharePaths = ROSTER.map(function (r, p) {
+    var path = el("path", { fill: colour(p), opacity: "0.85", d: "" });
+    shareSvg.appendChild(path);
+    return path;
+  });
+
+  function drawShare() {
+    if (samples.length < 2) return;
+    var n = samples.length;
+    var lower = new Array(n);
+    for (var i = 0; i < n; i++) lower[i] = SH;
+    for (var p = 0; p < PC; p++) {
+      var d = "", top = new Array(n);
+      for (var i2 = 0; i2 < n; i2++) top[i2] = lower[i2] - (samples[i2][p] / T) * SH;
+      d = "M0 " + lower[0].toFixed(1);
+      for (var i3 = 0; i3 < n; i3++) d += " L" + ((i3 / (n - 1)) * SW).toFixed(1) + " " + top[i3].toFixed(1);
+      for (var i4 = n - 1; i4 >= 0; i4--) d += " L" + ((i4 / (n - 1)) * SW).toFixed(1) + " " + lower[i4].toFixed(1);
+      sharePaths[p].setAttribute("d", d + " Z");
+      lower = top;
+    }
+  }
+
+  // ---- Match lifecycle ------------------------------------------------------
+  var tickKind = document.getElementById("tickKind"), tickMsg = document.getElementById("tickMsg");
+  var ticker = document.getElementById("ticker");
+  var turnNow = document.getElementById("turnNow"), decNow = document.getElementById("decNow");
+  var matchNo = document.getElementById("matchNo");
+
+  var gen = null, stateRef = { current: null }, agents = null, step = null;
+  var seed = (Date.now() % 100000) | 0;
+  var matches = 0, decisions = 0, lastEvent = { k: "setup", e: "Starting…", p: -1 };
+
+  function startMatch() {
+    matches++;
+    seed = (seed * 1103515245 + 12345) >>> 8;
+    agents = ROSTER.map(function (r, i) { return r.make(seed + i); });
+    stateRef = { current: null };
+    samples = [];
+    decisions = 0;
+    gen = B.playGame({
+      playerCount: PC,
+      seed: seed,
+      maxTurns: 400,
+      stateRef: stateRef,
+      onRecord: function (r) {
+        if (r.type === "turn_start") lastEvent = { k: "turn", e: agents[r.player].name + " collects " + r.income, p: r.player };
+        else if (r.type === "troops_moved_after_attack") lastEvent = { k: "conquer", e: agents[r.player].name + " takes " + EARTH.territoryNames[r.to], p: r.player };
+        else if (r.type === "player_eliminated") lastEvent = { k: "eliminate", e: agents[r.by].name + " eliminates " + agents[r.player].name, p: r.by };
+        else if (r.type === "cards_redeemed") lastEvent = { k: "cards", e: agents[r.player].name + " trades " + r.sets + " set(s) for " + r.troops, p: r.player };
+        else if (r.type === "game_end") lastEvent = { k: "end", e: r.winner === null ? "Turn limit reached" : agents[r.winner].name + " wins", p: r.winner === null ? -1 : r.winner };
+      }
+    });
+    step = gen.next();
+    matchNo.textContent = matches;
+  }
+
+  function endMatch(result) {
+    var ranking = result.ranking;
+    B.updateRatings(ratings, ranking);
+    for (var i = 0; i < ranking.length; i++) {
+      var s = stats[ranking[i]];
+      s.games++; s.rankSum += i + 1;
+      if (i === 0 && result.winner !== null) s.wins++;
+    }
+    drawLadder();
+  }
+
+  /** Advance the real engine by up to `budget` decisions. */
+  function advance(budget) {
+    var n = 0;
+    while (n < budget) {
+      if (step.done) { endMatch(step.value); startMatch(); return n; }
+      var q = step.value;
+      try {
+        step = gen.next(agents[q.player].act(q, B.observe(stateRef.current, q.player)));
+      } catch (err) {
+        lastEvent = { k: "illegal", e: agents[q.player].name + ": " + err.message, p: q.player };
+        endMatch({ ranking: [0, 1, 2, 3, 4], winner: null });
+        startMatch();
+        return n;
+      }
+      decisions++; n++;
+      if ((decisions & 31) === 0 && stateRef.current) sample();
+    }
+    return n;
+  }
+
+  function sample() {
+    var s = stateRef.current, counts = new Array(PC).fill(0);
+    for (var t = 0; t < T; t++) { var o = s.owner[t]; if (o >= 0) counts[o]++; }
+    samples.push(counts);
+    // Keep the series bounded on long matches by halving resolution.
+    if (samples.length > 400) {
+      var next = [];
+      for (var i = 0; i < samples.length; i += 2) next.push(samples[i]);
+      samples = next;
+    }
+  }
+
+  // ---- Painting -------------------------------------------------------------
+  function paint() {
+    var s = stateRef.current;
+    if (!s) return;
+
+    for (var t = 0; t < T; t++) {
+      var o = s.owner[t], u = s.troops[t], n = nodeEls[t];
+      if (n.owner !== o) { n.c.setAttribute("fill", colour(o)); n.owner = o; }
+      if (n.troops !== u) {
+        n.c.setAttribute("r", radius(u).toFixed(1));
+        n.n.textContent = u;
+        n.n.setAttribute("font-size", u > 99 ? "9" : "10.5");
+        n.troops = u;
+      }
+    }
+
+    for (var i = 0; i < linkEls.length; i++) {
+      var L = linkEls[i], hot = s.owner[L.a] !== s.owner[L.b];
+      if (L.hot !== hot) { L.el.setAttribute("class", hot ? "link hot" : "link"); L.hot = hot; }
+    }
+
+    for (var c = 0; c < contEls.length; c++) {
+      var ce = contEls[c], first = s.owner[ce.c.territories[0]], held = first >= 0;
+      for (var m = 1; m < ce.c.territories.length && held; m++) {
+        if (s.owner[ce.c.territories[m]] !== first) held = false;
+      }
+      var key = held ? first : -1;
+      if (ce.held !== key) {
+        ce.el.className = held ? "chip held" : "chip";
+        ce.el.style.background = held ? colour(first) : "var(--panel)";
+        ce.held = key;
+      }
+    }
+
+    for (var p = 0; p < PC; p++) {
+      var terr = 0, troops = 0;
+      for (var q = 0; q < T; q++) if (s.owner[q] === p) { terr++; troops += s.troops[q]; }
+      var tr = rows[p];
+      tr.querySelector(".terr").textContent = terr;
+      tr.querySelector(".troop").textContent = troops;
+      tr.querySelector(".bar span").style.width = ((terr / T) * 100).toFixed(1) + "%";
+      tr.className = terr === 0 ? "out" : "";
+    }
+
+    tickKind.textContent = lastEvent.k;
+    tickMsg.textContent = lastEvent.e;
+    ticker.style.borderLeftColor = colour(lastEvent.p);
+    turnNow.textContent = s.turn;
+    decNow.textContent = decisions;
+    drawShare();
+  }
+
+  // ---- Loop -----------------------------------------------------------------
+  // Normal speeds advance a fixed number of decisions per frame so the match is
+  // watchable. Turbo instead spends a time budget: it runs the engine as hard as
+  // the frame allows and paints whatever state it lands on, which is the honest
+  // way to show progress at full speed rather than a fast replay.
+  var SPEEDS = [3, 24, 192];
+  var speedIdx = 0, turbo = false, running = true;
+  var TURBO_BUDGET_MS = 11;
+
+  var lastTick = performance.now(), decAtTick = 0, matchAtTick = 0;
+  var rateEl = document.getElementById("rate"), gpsEl = document.getElementById("gps");
+  var totalDecisions = 0;
+
+  function frame() {
+    if (running) {
+      if (turbo) {
+        var t0 = performance.now(), did = 0;
+        while (performance.now() - t0 < TURBO_BUDGET_MS) did += advance(64);
+        totalDecisions += did;
+      } else {
+        totalDecisions += advance(SPEEDS[speedIdx]);
+      }
+      paint();
+    }
+
+    var now = performance.now();
+    if (now - lastTick > 500) {
+      var dt = (now - lastTick) / 1000;
+      rateEl.textContent = Math.round((totalDecisions - decAtTick) / dt).toLocaleString();
+      gpsEl.textContent = ((matches - matchAtTick) / dt).toFixed(1);
+      lastTick = now; decAtTick = totalDecisions; matchAtTick = matches;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---- Controls -------------------------------------------------------------
+  var playBtn = document.getElementById("play");
+  playBtn.addEventListener("click", function () {
+    running = !running;
+    playBtn.textContent = running ? "Pause" : "Play";
+    playBtn.setAttribute("aria-pressed", String(running));
+  });
+
+  var spBtns = [].slice.call(document.querySelectorAll(".sp"));
+  function syncSpeed() {
+    spBtns.forEach(function (b, i) { b.setAttribute("aria-pressed", String(!turbo && i === speedIdx)); });
+    document.getElementById("turbo").setAttribute("aria-pressed", String(turbo));
+  }
+  spBtns.forEach(function (b, i) {
+    b.addEventListener("click", function () { turbo = false; speedIdx = i; syncSpeed(); });
+  });
+  document.getElementById("turbo").addEventListener("click", function () {
+    turbo = !turbo; syncSpeed();
+  });
+  document.getElementById("skip").addEventListener("click", function () {
+    if (!step.done) endMatch({ ranking: [0, 1, 2, 3, 4], winner: null });
+    startMatch();
+  });
+
+  startMatch();
+  drawLadder();
+  syncSpeed();
+  paint();
+  requestAnimationFrame(frame);
+})();
+</script>

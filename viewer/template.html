@@ -281,7 +281,13 @@
     gap: 10px;
   }
 
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .panel-head button { padding: 4px 9px; min-height: 30px; font-size: 12px; }
+
   table { width: 100%; border-collapse: collapse; }
+  /* Right-aligned numeric columns sat flush against the next header, reading as
+     one run-together word. Every cell after the first gets breathing room. */
+  th + th, td + td { padding-left: 14px; }
   th {
     text-align: left;
     font-family: "Barlow Condensed", sans-serif;
@@ -364,8 +370,15 @@
     </div>
 
     <div class="panel">
-      <span class="label">Territory share over the match</span>
+      <div class="panel-head">
+        <span class="label">Territory share over the match</span>
+        <button id="spoil" aria-pressed="false" title="Show the rest of the recorded match">Reveal end</button>
+      </div>
       <svg class="share" id="share" viewBox="0 0 400 132" preserveAspectRatio="none" role="img" aria-label="Stacked area chart of territory share per player over the match"></svg>
+      <p class="note" style="margin:0">
+        History, not prediction &mdash; this match is already recorded. The bright region is what you
+        have watched; the rest stays veiled so the ending is not given away.
+      </p>
       <p class="note">
         All 42 classic territories are here &mdash; 9 in North America, 4 in South America, 7 in Europe,
         6 in Africa, 12 in Asia, 4 in Australia. Circles are territories, sized by garrison; lines are
@@ -387,6 +400,10 @@
   var F = R.frames.length;
   var PC = R.agents.length;
   var PLAYER_VARS = ["--p0", "--p1", "--p2", "--p3", "--p4", "--p1"];
+
+  function radius(u) {
+    return 8 + Math.min(u, 30) * 0.40;
+  }
 
   function colour(p) {
     if (p < 0) return "var(--edge)";
@@ -504,7 +521,7 @@
     var text = el("text", { x: xy[0], y: xy[1] + Y, "class": "node-label" });
     // Fixed offset rather than radius-relative, so the caption does not jitter
     // as the garrison grows and shrinks.
-    var caption = el("text", { x: xy[0], y: xy[1] + Y + 21, "class": "name-label" });
+    var caption = el("text", { x: xy[0], y: xy[1] + Y + 26, "class": "name-label" });
     caption.textContent = SHORT[M.names[t]] || M.names[t];
     var title = el("title", {});
     title.textContent = M.names[t];
@@ -557,10 +574,13 @@
       svg.appendChild(el("path", { d: d, fill: colour(p), opacity: "0.85" }));
       lower = top;
     }
+    svg.appendChild(el("rect", { x: 0, y: 0, width: W, height: H, fill: "var(--panel)", opacity: "0.82", id: "veil" }));
     var head = el("line", { x1: 0, y1: 0, x2: 0, y2: H, stroke: "var(--ink)", "stroke-width": "1.5", id: "playhead" });
     svg.appendChild(head);
   })();
   var playhead = document.getElementById("playhead");
+  var veil = document.getElementById("veil");
+  var spoiled = false;
 
   // ---- Render a frame ---------------------------------------------------------
   var standings = document.getElementById("standings");
@@ -596,7 +616,7 @@
       var u = troops[base + t];
       var n = nodeEls[t];
       n.c.setAttribute("fill", colour(p));
-      n.c.setAttribute("r", (8 + Math.min(u, 34) * 0.42).toFixed(1));
+      n.c.setAttribute("r", radius(u).toFixed(1));
       n.t.textContent = u;
       n.t.setAttribute("font-size", u > 99 ? "9" : "10.5");
     }
@@ -625,7 +645,7 @@
         var xy = M.layout[fr.h[h]];
         gFlash.appendChild(el("circle", {
           cx: xy[0], cy: xy[1] + Y,
-          r: (8 + Math.min(troops[base + fr.h[h]], 34) * 0.42 + 5).toFixed(1),
+          r: (radius(troops[base + fr.h[h]]) + 5).toFixed(1),
           "class": "flash",
           stroke: colour(fr.p)
         }));
@@ -647,8 +667,13 @@
     turnNow.textContent = fr.t;
     frameNow.textContent = f + 1;
     if (scrub.value !== String(f)) scrub.value = f;
-    playhead.setAttribute("x1", ((f / (F - 1)) * 400).toFixed(1));
-    playhead.setAttribute("x2", ((f / (F - 1)) * 400).toFixed(1));
+    var px = (f / (F - 1)) * 400;
+    playhead.setAttribute("x1", px.toFixed(1));
+    playhead.setAttribute("x2", px.toFixed(1));
+    if (!spoiled) {
+      veil.setAttribute("x", px.toFixed(1));
+      veil.setAttribute("width", Math.max(0, 400 - px).toFixed(1));
+    }
   }
 
   // ---- Transport --------------------------------------------------------------
@@ -689,6 +714,20 @@
     speedBtn.textContent = speeds[speedIdx] + "×";
     if (timer) start();
   });
+  var spoilBtn = document.getElementById("spoil");
+  spoilBtn.addEventListener("click", function () {
+    spoiled = !spoiled;
+    spoilBtn.setAttribute("aria-pressed", String(spoiled));
+    spoilBtn.textContent = spoiled ? "Hide end" : "Reveal end";
+    if (spoiled) {
+      veil.setAttribute("width", "0");
+    } else {
+      var px = (cur / (F - 1)) * 400;
+      veil.setAttribute("x", px.toFixed(1));
+      veil.setAttribute("width", Math.max(0, 400 - px).toFixed(1));
+    }
+  });
+
   document.getElementById("back").addEventListener("click", function () { stop(); render(Math.max(0, cur - 1)); });
   document.getElementById("fwd").addEventListener("click", function () { stop(); render(Math.min(F - 1, cur + 1)); });
   scrub.addEventListener("input", function () { stop(); render(+scrub.value); });

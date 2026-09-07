@@ -7,3 +7,5 @@ replays/
 
 replay.json
 viewer/index.html
+viewer/arena.html
+viewer/bellum.js
