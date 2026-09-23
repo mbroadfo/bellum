@@ -129,7 +129,6 @@ $env:AWS_PROFILE = "admin"
   -App riskarena `
   -Domain riskarena.xaminisalamini.com `
   -GithubRepo mbroadfo/bellum `
-  -Branch master `
   -CfZoneId <zone id> `
   -CfToken (Get-Clipboard)
 ```
@@ -142,11 +141,6 @@ Then push. `devops-infra.yml` applies the stack on changes under `terraform/`
 and writes `S3_BUCKET` and `CLOUDFRONT_DIST_ID` back as GitHub Variables;
 `devops-frontend.yml` type-checks, tests, builds, syncs and invalidates on
 changes under `packages/` or `viewer/`.
-
-**Watch the branch.** The OIDC trust policy is scoped to one branch, and
-bootstrap defaults to `main` while this repo is on `master`. Pass
-`-Branch master`, or rename the branch first — a mismatch fails at role
-assumption with an opaque error.
 
 ### Local plan
 
