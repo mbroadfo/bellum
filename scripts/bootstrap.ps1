@@ -79,8 +79,18 @@ if (-not $GhToken) { $GhToken = (gh auth token).Trim() }
 if (-not $GhToken) { throw "No GitHub token - run 'gh auth login' first." }
 
 # Account id comes from the profile - never typed, never wrong.
-$identity  = aws sts get-caller-identity --output json | ConvertFrom-Json
+$identity  = aws sts get-caller-identity --output json 2>$null | ConvertFrom-Json
 $AccountId = $identity.Account
+
+# Fail loudly here or not at all. Every AWS call below reports success
+# unconditionally, so without this the whole run prints "Created" five
+# times and "Bootstrap complete" while creating precisely nothing.
+if (-not $AccountId) {
+    throw ("Cannot reach AWS. 'aws sts get-caller-identity' returned no account" + [Environment]::NewLine +
+           "for profile '" + $(if ($env:AWS_PROFILE) { $env:AWS_PROFILE } else { 'default' }) + "'." + [Environment]::NewLine +
+           "Set working admin credentials first: aws configure --profile <name>, then" + [Environment]::NewLine +
+           "`$env:AWS_PROFILE = '<name>'. Verify with: aws sts get-caller-identity")
+}
 
 $TfBucket = "$App-tf-state"
 $SsmPath  = "/$App/$Environment/secrets"
