@@ -1,0 +1,121 @@
+name: "DevOps: Infrastructure"
+# Runs Terraform plan + apply, then in parallel:
+#   - Sets GitHub Variables (CLOUDFRONT_DIST_ID, S3_BUCKET)
+#
+# Static-only variant: the Lambda/API outputs and variables are removed.
+#   - Writes APP_SECRETS to SSM Parameter Store (delete the job if no backend)
+# Cloudflare DNS (ACM validation + app CNAME) is managed INSIDE Terraform via
+# the cloudflare provider — no post-apply dns job, no first-run deadlock
+# waiting on a validation record that doesn't exist yet.
+#
+# Auth: GitHub OIDC → assumes the {app}-terraform role. No AWS keys in Secrets.
+#
+# Required GitHub Variables (set by bootstrap.ps1):
+#   AWS_ACCOUNT_ID, TF_STATE_BUCKET, TF_VAR_APP_NAME, TF_VAR_ENVIRONMENT,
+#   TF_VAR_CUSTOM_DOMAIN, TF_VAR_SSM_SECRET_PATH, CLOUDFLARE_ZONE_ID
+# Required GitHub Secrets (set by bootstrap.ps1):
+#   CLOUDFLARE_API_TOKEN, GH_TOKEN, APP_SECRETS
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'terraform/**'
+  workflow_dispatch:
+
+concurrency:
+  group: devops-infrastructure
+  cancel-in-progress: false
+
+env:
+  AWS_DEFAULT_REGION: us-west-2
+
+permissions:
+  id-token: write   # OIDC token for AWS role assumption
+  contents: read
+
+jobs:
+  infra:
+    runs-on: ubuntu-latest
+    outputs:
+      cf_dist_id:           ${{ steps.out.outputs.cf_dist_id }}
+      cf_domain:            ${{ steps.out.outputs.cf_domain }}
+      s3_bucket:            ${{ steps.out.outputs.s3_bucket }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/${{ vars.TF_VAR_APP_NAME }}-terraform
+          aws-region: us-west-2
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: |
+          terraform init -reconfigure -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ vars.TF_VAR_APP_NAME }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_DEFAULT_REGION }}"
+
+      - name: Terraform Plan
+        working-directory: terraform
+        env:
+          TF_VAR_app_name:             ${{ vars.TF_VAR_APP_NAME }}
+          TF_VAR_environment:          ${{ vars.TF_VAR_ENVIRONMENT }}
+          TF_VAR_custom_domain:        ${{ vars.TF_VAR_CUSTOM_DOMAIN }}
+          TF_VAR_ssm_secret_path:      ${{ vars.TF_VAR_SSM_SECRET_PATH }}
+          TF_VAR_cloudflare_zone_id:   ${{ vars.CLOUDFLARE_ZONE_ID }}
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply tfplan
+
+      - name: Capture outputs
+        id: out
+        working-directory: terraform
+        run: |
+          echo "cf_dist_id=$(terraform output -raw cloudfront_distribution_id)"                             >> "$GITHUB_OUTPUT"
+          echo "cf_domain=$(terraform output -raw cloudfront_domain)"                                       >> "$GITHUB_OUTPUT"
+          echo "s3_bucket=$(terraform output -raw s3_bucket_name)"                                          >> "$GITHUB_OUTPUT"
+
+  vars:
+    runs-on: ubuntu-latest
+    needs: infra
+    steps:
+      - name: Update GitHub Variables
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+          gh variable set CLOUDFRONT_DIST_ID   --repo "$REPO" --body "${{ needs.infra.outputs.cf_dist_id }}"
+          gh variable set S3_BUCKET            --repo "$REPO" --body "${{ needs.infra.outputs.s3_bucket }}"
+
+  # Delete this job (and the APP_SECRETS secret) for a static SPA with no backend.
+  secrets:
+    runs-on: ubuntu-latest
+    needs: infra
+    permissions:
+      id-token: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/${{ vars.TF_VAR_APP_NAME }}-ci
+          aws-region: us-west-2
+
+      - name: Write APP_SECRETS to SSM Parameter Store
+        env:
+          APP_SECRETS: ${{ secrets.APP_SECRETS }}
+        run: |
+          aws ssm put-parameter \
+            --name "${{ vars.TF_VAR_SSM_SECRET_PATH }}" \
+            --type "SecureString" \
+            --value "$APP_SECRETS" \
+            --overwrite
+          echo "Secrets written to ${{ vars.TF_VAR_SSM_SECRET_PATH }}"

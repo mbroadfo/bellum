@@ -1,0 +1,88 @@
+name: "DevOps: Frontend"
+# Builds the Bellum live arena and deploys it to S3 + CloudFront.
+#
+# Adapted from mbroadfo/spa-on-aws for a static-only app. Two differences from
+# the upstream workflow:
+#
+#   1. No VITE_* build args. The arena has no API and no backend.
+#   2. No assets/ sync step. The build emits one self-contained index.html with
+#      the whole engine inlined, so there are no hashed filenames to cache
+#      immutably and nothing to cache-bust. One sync does it all.
+#
+# Auth: GitHub OIDC -> assumes the {app}-ci role. No AWS keys in Secrets.
+#
+# Required GitHub Variables:
+#   AWS_ACCOUNT_ID, TF_VAR_APP_NAME   (set by bootstrap.ps1)
+#   S3_BUCKET, CLOUDFRONT_DIST_ID     (auto-set by devops-infra.yml)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'packages/**'
+      - 'viewer/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/devops-frontend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: devops-frontend
+  cancel-in-progress: true
+
+env:
+  AWS_DEFAULT_REGION: us-west-2
+
+permissions:
+  id-token: write # OIDC token for AWS role assumption
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The arena runs the real engine in the browser, so a broken rule set
+      # ships as a broken site. Gate the deploy on the same checks the repo
+      # runs locally.
+      - name: Type check
+        run: npx tsc -b
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build:web
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/${{ vars.TF_VAR_APP_NAME }}-ci
+          aws-region: us-west-2
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync dist/ s3://${{ vars.S3_BUCKET }}/ \
+            --delete \
+            --cache-control "public,max-age=0,must-revalidate"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CLOUDFRONT_DIST_ID }} \
+            --paths "/*"
+
+      - name: Summary
+        run: |
+          echo "### Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Size: $(du -h dist/index.html | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "- Bucket: \`${{ vars.S3_BUCKET }}\`" >> $GITHUB_STEP_SUMMARY

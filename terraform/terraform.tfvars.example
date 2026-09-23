@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars for local plans. CI does not read this file:
+# devops-infra.yml passes every value as TF_VAR_* from GitHub Variables, which
+# bootstrap.ps1 sets. Real values belong there, not here.
+#
+# terraform.tfvars is gitignored. cloudflare_api_token must never be committed;
+# supply it from the environment instead:
+#
+#     $env:TF_VAR_cloudflare_api_token = "..."   # PowerShell
+#     export TF_VAR_cloudflare_api_token=...     # bash
+
+app_name      = "riskarena"
+custom_domain = "riskarena.xaminisalamini.com"
+
+# Cloudflare dashboard -> xaminisalamini.com -> Overview -> API section.
+# The token needs Zone:DNS:Edit on this zone and nothing more.
+cloudflare_zone_id = "REPLACE_ME"
+
+environment = "prod"
+aws_region  = "us-west-2"
+
+# PriceClass_100 is US + EU. The arena is a single 50 KB file, so the cheaper
+# class costs essentially nothing in latency.
+price_class = "PriceClass_100"

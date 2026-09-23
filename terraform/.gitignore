@@ -1,0 +1,13 @@
+.terraform/
+tfplan
+lambda_stub.zip
+crash.log
+
+# Never commit real variable values: terraform.tfvars holds the Cloudflare API
+# token. The .example file is the one that is tracked.
+*.tfvars
+!*.tfvars.example
+
+# State lives in the S3 backend; these only appear from stray local runs.
+terraform.tfstate
+terraform.tfstate.*

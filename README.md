@@ -12,16 +12,18 @@ borrowed from the best of what does exist, but the arena is new.
 
 ## What is here
 
-```
+```text
 packages/core     rules engine, protocol, observation, match drivers   (no deps)
 packages/agents   random, heuristic, and the NEAT / LLM / human seats
-packages/arena    TrueSkill ladder, tournament runner, CLI
+packages/arena    TrueSkill ladder, tournament runner, replay capture, CLI
+viewer/           the live arena page - bundles the engine to 24 KB for the browser
 ```
 
 ```bash
 npm install
 npm test            # 7 tests, ~2s
 npm run arena 200   # run a 200-game ladder across all three paradigms
+npm run preview     # build viewer/arena.html - plays live matches in a browser
 ```
 
 ## The one design decision everything rests on
@@ -38,7 +40,7 @@ Inverting it gives **two clocks over one rule set**:
 
 | | driver | agents | throughput |
 |---|---|---|---|
-| batch | `runMatchSync` | must be synchronous | ~35 six-player games/sec, single core |
+| batch | `runMatchSync` | must be synchronous | 113 six-player games/sec, single core |
 | live | `runMatch` | may return Promises | one move per LLM round-trip |
 
 `Agent.act` returns `Move | Promise<Move>`. That union is the whole trick: the
@@ -68,9 +70,14 @@ connectivity-checked fortify), seeded reproducibility, fog of war, replay
 records, illegal-move detection, TrueSkill ladder, random + heuristic agents, and
 the NEAT / LLM / human adapters.
 
-Not yet built: an actual NEAT implementation (only the `Policy` contract),
-a provider binding for `LlmAgent` (only the `Completion` contract), the web
-client, and the match server.
+Also working: the live arena page. The engine has no runtime dependencies, so
+it bundles to 24 KB and runs in the browser - the page plays real matches rather
+than replaying a recording, and turbo mode spends a per-frame time budget on the
+engine and paints whatever state it lands on.
+
+Not yet built: an actual NEAT implementation (only the `Policy` contract), a
+provider binding for `LlmAgent` (only the `Completion` contract), and the human
+seat wired to the board.
 
 ### Two things the first run already surfaced
 
@@ -100,3 +107,70 @@ client, and the match server.
 
 A note on the name: Bellum, not Risk. Hasbro owns that one, which is why
 everything in this space is called Domination, Conquest, Lux, or Warzone.
+
+## Deploying
+
+`npm run build:web` emits `dist/index.html` — one self-contained file, ~51 KB,
+engine inlined, nothing fetched at runtime. There is no backend and no asset
+directory, so hosting it is a single S3 sync.
+
+Infrastructure is the static-only subset of
+[spa-on-aws](https://github.com/mbroadfo/spa-on-aws): S3 + CloudFront + ACM,
+with Cloudflare DNS managed inside Terraform (unproxied — double-proxying
+breaks ACM validation). `lambda.tf`, `api_gateway.tf` and the `archive`
+provider are omitted.
+
+### One-time setup
+
+```powershell
+# Admin credentials are used once, here, and nowhere else afterwards.
+$env:AWS_PROFILE = "admin"
+./scripts/bootstrap.ps1 `
+  -App riskarena `
+  -Domain riskarena.xaminisalamini.com `
+  -GithubRepo mbroadfo/bellum `
+  -Branch master `
+  -CfZoneId <zone id> `
+  -CfToken (Get-Clipboard)
+```
+
+This creates the Terraform state bucket, the GitHub OIDC provider, the scoped
+`riskarena-terraform` and `riskarena-ci` roles, and the GitHub Variables. No AWS
+keys are ever stored in GitHub.
+
+Then push. `devops-infra.yml` applies the stack on changes under `terraform/`
+and writes `S3_BUCKET` and `CLOUDFRONT_DIST_ID` back as GitHub Variables;
+`devops-frontend.yml` type-checks, tests, builds, syncs and invalidates on
+changes under `packages/` or `viewer/`.
+
+**Watch the branch.** The OIDC trust policy is scoped to one branch, and
+bootstrap defaults to `main` while this repo is on `master`. Pass
+`-Branch master`, or rename the branch first — a mismatch fails at role
+assumption with an opaque error.
+
+### Local plan
+
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars   # then edit
+export TF_VAR_cloudflare_api_token=...        # never put the token in the file
+terraform -chdir=terraform init
+terraform -chdir=terraform plan
+```
+
+`*.tfvars` is gitignored; `*.tfvars.example` is not.
+
+### Upstream divergence worth reporting
+
+`spa-on-aws`'s `outputs.tf` wraps the Lambda outputs in `try()` and the README
+says the file needs no edits when you delete `api_gateway.tf` and `lambda.tf`.
+That is not true: `try()` catches evaluation errors, but a reference to a
+resource that was never declared fails at `terraform validate`. Those two
+outputs are deleted here, and the matching lines are removed from
+`devops-infra.yml`.
+
+### Why not just share the Claude artifact
+
+The artifact is the review surface, not the release. It lives on a
+`claude.ai/code/artifact/<uuid>` URL that cannot be pointed at a custom domain —
+a CNAME would need claude.ai to serve and certify your hostname — and a public
+site should not depend on a personal account's sharing settings.

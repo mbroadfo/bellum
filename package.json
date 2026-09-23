@@ -2,7 +2,7 @@
   "name": "bellum",
   "private": true,
   "version": "0.1.0",
-  "description": "Bellum — a cross-paradigm arena for Risk-like world conquest: LLM, algorithmic, and neuroevolved agents on one ladder.",
+  "description": "Bellum \u2014 a cross-paradigm arena for Risk-like world conquest: LLM, algorithmic, and neuroevolved agents on one ladder.",
   "workspaces": [
     "packages/*"
   ],
@@ -10,7 +10,10 @@
   "scripts": {
     "build": "tsc -b",
     "test": "node --test --import tsx packages/*/test/*.test.ts",
-    "arena": "tsx packages/arena/src/cli.ts"
+    "arena": "tsx packages/arena/src/cli.ts",
+    "bundle": "esbuild viewer/live-entry.ts --bundle --format=iife --global-name=Bellum --minify --target=es2020 --outfile=viewer/bellum.js",
+    "build:web": "npm run bundle && node viewer/build-live.mjs dist/index.html",
+    "preview": "npm run bundle && node viewer/build-live.mjs viewer/arena.html"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
